@@ -1,6 +1,7 @@
 ---
 layout: post
 title: Build a blog using Github Pages and Jekyll
+toc: true
 categories: [Internet]
 ---
 
