@@ -4,6 +4,12 @@ title: About
 permalink: /about
 ---
 
-Hi, Write an awesome description about your blog here.  
-Feel free to make it a bit more interesting by adding a picture or two.  
-Only limit here is your creativity and imagination. Unleash them with full force.  
+Hi, this blog includes but is not limited to
+- Infrastructure as a Service
+- Virtualization
+- Cloud Networking
+- Cloud Storage
+- Cloud Native
+- Linux OS and softwares
+
+Email: [blog@cloudabc.eu](mailto:blog@cloudabc.eu)
