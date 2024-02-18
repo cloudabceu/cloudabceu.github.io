@@ -118,3 +118,6 @@ include:
 
 # Excerpt separator
 excerpt_separator: <!--more-->
+
+# Display the posts in the future
+future: true
