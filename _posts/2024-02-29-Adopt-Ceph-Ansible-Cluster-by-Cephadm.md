@@ -9,7 +9,7 @@ Cephadm is is the new official Ceph installer, which is more recommended. If you
 
 <!--more-->
 
-This is a follow-up of [Ceph - Easy Deployment by ceph-ansible]({{ site.baseurl }}{% post_url 2024-02-21-Ceph-Deoloy-By-Ansible %})
+This is a follow-up of [Ceph - Easy Deployment by ceph-ansible]({{ site.baseurl }}{% post_url 2024-02-21-Ceph-Deploy-By-Ansible %})
 
 [Comparison between Ceph Ansible and Cephadm](https://www.ibm.com/docs/en/storage-ceph/7?topic=installing-comparison-between-ceph-ansible-cephadm) explains the difference between Ceph-ansible and Cephadm. Cephadm is is the new official Ceph installer, which is more recommended. 
 
