@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Easy Ceph Deployment by ceph-ansible
+title: Ceph - Easy Deployment by ceph-ansible
 toc: true
 categories: [Ceph]
 ---
@@ -18,9 +18,9 @@ The ansible needs to be installed or upgraded to more recent version.
 $ pip3 install --upgrade ansible ansible-core
 
 $ pip3 list |grep ansible
-ansible                 9.2.0
+ansible                 9.3.0
 ansible-base            2.10.17
-ansible-core            2.16.3
+ansible-core            2.16.4
 ```
 
 If Ansible is not upgraded, an error might be displayed: `Ansible version must be either 2.15 or 2.16!`
@@ -209,7 +209,18 @@ Then run the commands below
 $ cp ./site.yml.sample site.yml
 
 $ ansible-playbook site.yml -i ceph-hosts --limit ceph-4
+...
+
+PLAY RECAP ******************************************************************************************************************************************************************
+ceph-4                     : ok=180  changed=28   unreachable=0    failed=0    skipped=285  rescued=0    ignored=0   
+
+
+INSTALLER STATUS ************************************************************************************************************************************************************
+Install Ceph OSD               : Complete (0:01:01)
+Install Ceph Node Exporter     : Complete (0:01:01)
+Install Ceph Crash             : Complete (0:00:07)
 ```
+
 
 Please refer to [Adding osd(s)](https://docs.ceph.com/projects/ceph-ansible/en/latest/day-2/osds.html)
 
