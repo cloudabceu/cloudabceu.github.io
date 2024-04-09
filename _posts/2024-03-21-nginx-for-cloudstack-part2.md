@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Setup Nginx reverse proxy for Apache CloudStack (Part 2 - VM Console Proxy)
+title: Setup Nginx reverse proxy for Apache CloudStack (Part 2 - Console Proxy VM)
 toc: true
 categories: [CloudStack]
 ---
