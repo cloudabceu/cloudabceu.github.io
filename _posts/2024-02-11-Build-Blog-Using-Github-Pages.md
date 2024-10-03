@@ -126,7 +126,7 @@ To test blog locally, install gem plug-ins. Here are the commands run on Ubuntu 
 sudo apt install ruby-rubygems ruby-dev
 sudo gem install github-pages
 # Do NOT forget: Add `gem "kramdown-parser-gfm"` to Gemfile
-jekyll serve
+sudo jekyll serve
 # If it does not work, run `sudo bundle update`
 # Access http://localhost:4000/
 ```
