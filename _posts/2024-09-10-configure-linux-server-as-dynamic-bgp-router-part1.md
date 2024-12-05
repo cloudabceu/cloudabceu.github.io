@@ -92,6 +92,11 @@ The Linux server can be setup as a router very easily by the following commands.
     sudo iptables -t nat -A POSTROUTING -j MASQUERADE
 ```
 
+The last rule (`MASQUERADE`) can be replaced by
+```
+sudo iptables -t nat -A POSTROUTING -o eth0 -j SNAT --to-source 10.0.XX.XX
+```
+
 ## Step 4: Verify routing
 
 Now deploy a test server on the same network as the Linux router.
