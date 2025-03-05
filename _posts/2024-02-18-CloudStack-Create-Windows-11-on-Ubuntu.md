@@ -7,6 +7,8 @@ categories: [CloudStack]
 
 The article [CloudStack – VM with vTPM and Secure boot UEFI](https://lab.piszki.pl/cloudstack-vm-with-vtpm-and-secure-boot-uefi/) introduces how to create a VM with vTPM and UEFI on CentOS x host using Apache CloudStack. However, it does not work on Ubuntu releases [\[2\]](https://github.com/apache/cloudstack/issues/8469). This blog introduces how to create Window 11 VMs step by step.
 
+<b>IMPORTANT NOTICE: There are some changes after this original post</b>. Please refer to [CloudStack - Create Windows 11 VM instance on Ubuntu (Update 2025.03)]({{ "/cloudstack/2025/03/05/CloudStack-Create-Windows-11-on-Ubuntu-Update/" | absolute_url }})
+
 <!--more-->
 
 ## Minimum System Requirements of Windows 11
