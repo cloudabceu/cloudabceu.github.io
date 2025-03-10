@@ -98,5 +98,14 @@ It looks good.
     --cgroupns=host \
 ```
 
-4. The name of sshd service in the docker container is `sshd`, not the same as Ubuntu/Debian container (which uses `ssh`).
+4. The name of sshd service in the docker container is `sshd`, not the same as Ubuntu/Debian container (which uses `ssh`). To set the default root password and enable ssh,
+```
+echo "root:password" |chpasswd
+echo "PermitRootLogin yes" >>/etc/ssh/sshd_config
+systemctl enable ssh || systemctl enable sshd
+systemctl restart ssh || systemctl restart sshd
+```
+
+5. This only works for RHEL/RockyLinux/AlmaLinux/OracleLinux, not for Ubuntu/Debian.
+To support it, please refer to [Support systemd services in Ubuntu/Debian Docker container]({{ "/linux/container/2024/10/27/ubuntu-docker-container-systemd/" | absolute_url }})
 

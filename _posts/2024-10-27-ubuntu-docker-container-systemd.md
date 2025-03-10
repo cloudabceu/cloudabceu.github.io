@@ -97,4 +97,4 @@ Exiting PID 1...
 
 3. `RUN echo exit 0 > /usr/sbin/policy-rc.d` overwites the file `/usr/sbin/policy-rc.d`, it exits with code 101 by default which prevents some daemons from starting or restarting during package upgrade or installation.
 
-4. This only works for Ubuntu/Debian, not for RHEL/RockyLinux/AlmaLinux/OracleLinux.
+4. This only works for Ubuntu/Debian, not for RHEL/RockyLinux/AlmaLinux/OracleLinux. To support it, please refer to [Support systemd services in CentOS/Rocky/Alma/OracleLinux Docker container]({{ "/linux/container/2024/11/11/rhel-docker-container-systemd/" | absolute_url }})
