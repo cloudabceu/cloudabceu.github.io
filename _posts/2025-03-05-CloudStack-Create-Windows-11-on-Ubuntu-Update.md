@@ -13,7 +13,7 @@ In the past year, there are some related changes. This article introduces what h
 
 ## Apache CloudStack no longer supports VM settings for extraconfig
 
-Due to critical vulnerability [CloudStack - Create Windows 11 VM instance on Ubuntu (Update 2025.03)](https://www.cve.org/CVERecord?id=CVE-2024-29008), it is no longer possible to add VM setting for VM extraconfig via GUI.
+Due to critical vulnerability [CVE-2024-29008: Apache CloudStack: The extraconfig feature can be abused to load hypervisor resources on a VM instance](https://www.cve.org/CVERecord?id=CVE-2024-29008), it is no longer possible to add VM setting for VM extraconfig via GUI.
 
 Users will get an error message `It is not allowed to add setting for extraconfig. Please update VirtualMachine with extraconfig parameter.`
 

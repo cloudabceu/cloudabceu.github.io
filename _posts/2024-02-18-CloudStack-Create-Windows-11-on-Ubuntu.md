@@ -5,11 +5,15 @@ toc: true
 categories: [CloudStack]
 ---
 
+<b>-----IMPORTANT NOTICE: There are some changes after this original post------</b>
+
+Please refer to [CloudStack - Create Windows 11 VM instance on Ubuntu (Update 2025.03)]({{ "/cloudstack/2025/03/05/CloudStack-Create-Windows-11-on-Ubuntu-Update/" | absolute_url }})
+
 The article [CloudStack – VM with vTPM and Secure boot UEFI](https://lab.piszki.pl/cloudstack-vm-with-vtpm-and-secure-boot-uefi/) introduces how to create a VM with vTPM and UEFI on CentOS x host using Apache CloudStack. However, it does not work on Ubuntu releases [\[2\]](https://github.com/apache/cloudstack/issues/8469). This blog introduces how to create Window 11 VMs step by step.
 
-<b>IMPORTANT NOTICE: There are some changes after this original post</b>. Please refer to [CloudStack - Create Windows 11 VM instance on Ubuntu (Update 2025.03)]({{ "/cloudstack/2025/03/05/CloudStack-Create-Windows-11-on-Ubuntu-Update/" | absolute_url }})
-
 <!--more-->
+
+If you use RHEL, RockyLinux or AlmaLinux, please refer to [CloudStack - Create Windows 11 VM instance on RHEL/RockyLinux/AlmaLinux]({{ "/cloudstack/2025/03/13/CloudStack-Create-Windows-11-on-RHEL-RockyLinux-AlmaLinux/" | absolute_url }})
 
 ## Minimum System Requirements of Windows 11
 
@@ -65,7 +69,7 @@ lrwxrwxrwx 1 root root      20 Sep 13  2022 OVMF_CODE.ms.fd -> OVMF_CODE.secboot
 -rw-r--r-- 1 root root  131072 Sep 13  2022 OVMF_VARS.ms.fd
 ```
 
-Create a file `/etc/cloudstack/agent/uefi.properties`with content as below
+Create a file `/etc/cloudstack/agent/uefi.properties` with content as below
 ```
 guest.nvram.template.secure=/usr/share/OVMF/OVMF_VARS_4M.ms.fd
 guest.nvram.template.legacy=/usr/share/OVMF/OVMF_VARS_4M.fd
