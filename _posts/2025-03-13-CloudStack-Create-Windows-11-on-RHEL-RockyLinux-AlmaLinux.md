@@ -43,11 +43,11 @@ lrwxrwxrwx. 1 root root 26 Dec 17 20:44 UefiShell.iso -> ../edk2/ovmf/UefiShell.
 
 Create a file `/etc/cloudstack/agent/uefi.properties` with content as below
 ```
-guest.nvram.template.secure=/usr/share/OVMF/OVMF_VARS.secboot.fd
-guest.nvram.template.legacy=
+guest.nvram.template.secure=/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd
+guest.nvram.template.legacy=/usr/share/edk2/ovmf/OVMF_VARS.fd
 guest.nvram.path=/var/lib/libvirt/qemu/nvram/
-guest.loader.secure=/usr/share/OVMF/OVMF_CODE.secboot.fd
-guest.loader.legacy=
+guest.loader.secure=/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd
+guest.loader.legacy=/usr/share/edk2/ovmf/OVMF_CODE.cc.fd
 ```
 
 Restarting cloudstack-agent to make it effective
