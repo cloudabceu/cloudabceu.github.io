@@ -1,6 +1,6 @@
 ---
 layout: post
-title: CloudStack Howto - Patch management servers and hosts
+title: CloudStack HowTo - Patch management servers and hosts
 toc: true
 categories: [CloudStack]
 ---
