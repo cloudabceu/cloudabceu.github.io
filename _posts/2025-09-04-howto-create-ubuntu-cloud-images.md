@@ -145,3 +145,23 @@ ovftool ubuntu-24.04-minimal-cloudimg-amd64.vmx ubuntu-24.04-minimal-cloudimg-am
 
 Now we can register a VMware template with the generated `ubuntu-24.04-minimal-cloudimg-amd64.ova` file.
 
+## Issue with cloud images on VMware
+
+Please note, For the vm instances running on VMware or XenServer/XCP-ng hypervisors, if there are multiple cloud-init data sources, it is a known issue that ds-identify is not able to detect if "CloudStack" DataSource is enabled. To fix the problem, please run the following command to enable cloud-init without any aid from ds-identify.
+
+```
+# Enable cloud-init without any aid from ds-identify
+echo "policy: enabled" >  /etc/cloud/ds-identify.cfg
+```
+
+Then ask cloud-init to use the data sources defined.
+```
+# Add ConfigDrive to datasource_list
+cat > /etc/cloud/cloud.cfg.d/cloudstack.cfg <<EOF
+datasource_list: ['ConfigDrive', 'CloudStack']
+datasource:
+  CloudStack:
+    max_wait: 120
+    timeout: 50
+EOF
+```
