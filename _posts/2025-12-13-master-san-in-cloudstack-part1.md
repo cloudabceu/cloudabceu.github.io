@@ -104,57 +104,7 @@ Sector size (logical/physical): 512 bytes / 512 bytes
 I/O size (minimum/optimal): 512 bytes / 512 bytes
 ```
 
-Create partition
-```
-[root@ol90 ~]# printf "n\np\n1\n\n\nw\n" | fdisk /dev/sdb
-
-Welcome to fdisk (util-linux 2.37.4).
-Changes will remain in memory only, until you decide to write them.
-Be careful before using the write command.
-
-Device does not contain a recognized partition table.
-Created a new DOS disklabel with disk identifier 0x741dd5ab.
-
-Command (m for help): Partition type
-   p   primary (0 primary, 0 extended, 4 free)
-   e   extended (container for logical partitions)
-Select (default p): Partition number (1-4, default 1): First sector (2048-209715199, default 2048): Last sector, +/-sectors or +/-size{K,M,G,T,P} (2048-209715199, default 209715199): 
-Created a new partition 1 of type 'Linux' and of size 100 GiB.
-
-Command (m for help): The partition table has been altered.
-Calling ioctl() to re-read partition table.
-Syncing disks.
-```
-
-then format with ext4 filesystem
-
-```
-[root@ol90 ~]# mkfs.ext4 /dev/sdb1
-mke2fs 1.46.5 (30-Dec-2021)
-Creating filesystem with 26214144 4k blocks and 6553600 inodes
-Filesystem UUID: 29492435-5e68-480c-b8c0-f84e4d6e0c32
-Superblock backups stored on blocks: 
-    32768, 98304, 163840, 229376, 294912, 819200, 884736, 1605632, 2654208, 
-    4096000, 7962624, 11239424, 20480000, 23887872
-
-Allocating group tables: done                            
-Writing inode tables: done                            
-Creating journal (131072 blocks): done
-Writing superblocks and filesystem accounting information: done   
-```
-
-Mount it locally
-```
-[root@ol90 ~]# mkdir -p /scsi
-[root@ol90 ~]# mount /dev/sdb1 /scsi/
-[root@ol90 ~]# echo "/dev/sdb1     /scsi    ext4  defaults  0 2" >>/etc/fstab
-[root@ol90 ~]# ls -l /scsi/
-total 16
-drwx------. 2 root root 16384 Dec 12 19:36 lost+found
-[root@ol90 ~]# 
-```
-
-### Setup as iSCSI server
+### Install dependencies
 
 ```
 [root@ol90 ~]# sudo dnf install targetcli -y
@@ -232,9 +182,151 @@ o- / ...........................................................................
 [root@ol90 ~]# 
 ```
 
-### Create iSCSI target
+### Configure firewall
 
-Run below commands to create a image and expose it as iSCSI target
+Add a firewall rule to allow port 3260
+```
+sudo firewall-cmd --add-port=3260/tcp --permanent
+sudo firewall-cmd --reload
+```
+
+Alternatively, stop and disable the firewall totally
+```
+systemctl stop firewalld && systemctl disable firewalld
+```
+
+### Option 1: Export Whole Physical Device as iSCSI target
+
+Here are two options for exporting devices as iSCSI targets, both for whole devices and disk.
+
+#### Expose /dev/sdb as iSCSI target
+
+Run below commands to expose the whole device as iSCSI target.
+
+```
+dev=sdb
+iscsi_prefix=iqn.2025-12.local
+iscsi_target_iqn=$iscsi_prefix.server:$dev
+
+targetcli backstores/block create name=$dev dev=/dev/$dev &&
+targetcli /iscsi create $iscsi_target_iqn &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/luns/ create /backstores/block/$dev &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/acls/ create $iscsi_prefix.client:node01 &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/acls/$iscsi_prefix.client:node01 set auth userid=user &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/acls/$iscsi_prefix.client:node01 set auth password=Password &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1 set attribute authentication=1 &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1 set attribute demo_mode_write_protect=1 &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1 set attribute generate_node_acls=1 &&
+targetcli saveconfig
+```
+
+#### Configure ACLs
+
+```
+targetcli /iscsi/$iscsi_target_iqn/tpg1/acls/ create $iscsi_prefix.client:node01 &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/acls/$iscsi_prefix.client:node01 set auth userid=user &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/acls/$iscsi_prefix.client:node01 set auth password=Password &&
+targetcli saveconfig
+```
+
+Please note, only the iSCSI client with initiator name `$iscsi_prefix.client:node01` can login using the username and password.
+
+Alternatively, to allow any initiator to connect, we can remove the acls and set global username and password on iSCSI server.
+
+```
+targetcli /iscsi/$iscsi_target_iqn/tpg1/acls/ delete $iscsi_prefix.client:node01 &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/ set attribute authentication=1 &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/ set attribute demo_mode_write_protect=0 &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/ set attribute generate_node_acls=1 &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/ set auth userid=user &&
+targetcli /iscsi/$iscsi_target_iqn/tpg1/ set auth password=Password &&
+targetcli saveconfig
+```
+
+#### Verification
+
+Check the new state
+
+```
+[root@wei-rocky9-lvm ~]# targetcli ls
+o- / ......................................................................................................................... [...]
+  o- backstores .............................................................................................................. [...]
+  | o- block .................................................................................................. [Storage Objects: 1]
+  | | o- sdb ............................................................................ [/dev/sdb (100.0GiB) write-thru activated]
+  | |   o- alua ................................................................................................... [ALUA Groups: 1]
+  | |     o- default_tg_pt_gp ....................................................................... [ALUA state: Active/optimized]
+  | o- fileio ................................................................................................. [Storage Objects: 0]
+  | o- pscsi .................................................................................................. [Storage Objects: 0]
+  | o- ramdisk ................................................................................................ [Storage Objects: 0]
+  o- iscsi ............................................................................................................ [Targets: 1]
+  | o- iqn.2025-12.local.server:sdb ...................................................................................... [TPGs: 1]
+  |   o- tpg1 ..................................................................................... [gen-acls, tpg-auth, 1-way auth]
+  |     o- acls .......................................................................................................... [ACLs: 1]
+  |     | o- iqn.2025-12.local.client:node01 ........................................................ [auth via tpg, Mapped LUNs: 1]
+  |     |   o- mapped_lun0 ................................................................................... [lun0 block/sdb (rw)]
+  |     o- luns .......................................................................................................... [LUNs: 1]
+  |     | o- lun0 ........................................................................ [block/sdb (/dev/sdb) (default_tg_pt_gp)]
+  |     o- portals .................................................................................................... [Portals: 1]
+  |       o- 0.0.0.0:3260 ..................................................................................................... [OK]
+  o- loopback ......................................................................................................... [Targets: 0]
+```
+
+### Option 2: Export Disk Image File as iSCSI target
+
+#### Create partition
+
+```
+[root@ol90 ~]# printf "n\np\n1\n\n\nw\n" | fdisk /dev/sdb
+
+Welcome to fdisk (util-linux 2.37.4).
+Changes will remain in memory only, until you decide to write them.
+Be careful before using the write command.
+
+Device does not contain a recognized partition table.
+Created a new DOS disklabel with disk identifier 0x741dd5ab.
+
+Command (m for help): Partition type
+   p   primary (0 primary, 0 extended, 4 free)
+   e   extended (container for logical partitions)
+Select (default p): Partition number (1-4, default 1): First sector (2048-209715199, default 2048): Last sector, +/-sectors or +/-size{K,M,G,T,P} (2048-209715199, default 209715199): 
+Created a new partition 1 of type 'Linux' and of size 100 GiB.
+
+Command (m for help): The partition table has been altered.
+Calling ioctl() to re-read partition table.
+Syncing disks.
+```
+
+#### Format partition with filesystem
+
+```
+[root@ol90 ~]# mkfs.ext4 /dev/sdb1
+mke2fs 1.46.5 (30-Dec-2021)
+Creating filesystem with 26214144 4k blocks and 6553600 inodes
+Filesystem UUID: 29492435-5e68-480c-b8c0-f84e4d6e0c32
+Superblock backups stored on blocks: 
+    32768, 98304, 163840, 229376, 294912, 819200, 884736, 1605632, 2654208, 
+    4096000, 7962624, 11239424, 20480000, 23887872
+
+Allocating group tables: done                            
+Writing inode tables: done                            
+Creating journal (131072 blocks): done
+Writing superblocks and filesystem accounting information: done   
+```
+
+Mount it locally
+```
+[root@ol90 ~]# mkdir -p /scsi
+[root@ol90 ~]# mount /dev/sdb1 /scsi/
+[root@ol90 ~]# echo "/dev/sdb1     /scsi    ext4  defaults  0 2" >>/etc/fstab
+[root@ol90 ~]# ls -l /scsi/
+total 16
+drwx------. 2 root root 16384 Dec 12 19:36 lost+found
+[root@ol90 ~]# 
+```
+
+#### Create image and expose as iSCSI target
+
+Run below commands to create an image and expose it as iSCSI target
 ```
 disk=disk01
 size=40G
@@ -268,7 +360,9 @@ Parameter generate_node_acls is now '1'.
 Configuration saved to /etc/target/saveconfig.json
 ```
 
-New state
+For ACLs, please check "Configure ACLs" section.
+
+Now check the new state
 ```
 
 [root@ol90 ~]# targetcli ls
@@ -296,7 +390,7 @@ o- / ...........................................................................
 
 ```
 
-### Create another iSCSI target (Optionally)
+#### Create another iSCSI target (Optionally)
 
 ```
 [root@ol90 ~]# disk=disk02
@@ -368,18 +462,7 @@ o- / ...........................................................................
   o- vhost ............................................................................................................ [Targets: 0]
 ```
 
-### Enable firewall
 
-Add a firewall rule to allow port 3260
-```
-sudo firewall-cmd --add-port=3260/tcp --permanent
-sudo firewall-cmd --reload
-```
-
-Alternatively, stop and disable the firewall totally
-```
-systemctl stop firewalld && systemctl disable firewalld
-```
 
 ## Hands-On: Find iSCSI Targets on KVM Hosts
 
@@ -390,6 +473,7 @@ systemctl stop firewalld && systemctl disable firewalld
 10.1.32.137:3260,1 iqn.2025-12.local.server:disk01
 10.1.32.137:3260,1 iqn.2025-12.local.server:disk02
 ```
+
 Login
 ```
 [root@kvm1 ~]# iscsiadm -m node --login
@@ -397,6 +481,47 @@ Logging in to [iface: default, target: iqn.2025-12.local.server:disk01, portal: 
 Logging in to [iface: default, target: iqn.2025-12.local.server:disk02, portal: 10.1.32.137,3260]
 Login to [iface: default, target: iqn.2025-12.local.server:disk01, portal: 10.1.32.137,3260] successful.
 Login to [iface: default, target: iqn.2025-12.local.server:disk02, portal: 10.1.32.137,3260] successful.
+```
+
+### Discover iSCSI targets with CHAP authentication
+
+If the iSCSI target is configured as username and password, login will fail with error
+
+```
+[root@kvm1 ~]# iscsiadm -m node -p 10.1.32.197 \
+  --op update -n node.session.auth.authmethod -v CHAP \
+  --op update -n node.session.auth.username -v user \
+  --op update -n node.session.auth.password -v Password
+
+[root@kvm1 ~]# iscsiadm -m node --login
+Logging in to [iface: default, target: iqn.2025-12.local.server:sdb, portal: 10.1.32.197,3260]
+iscsiadm: Could not login to [iface: default, target: iqn.2025-12.local.server:sdb, portal: 10.1.32.197,3260].
+iscsiadm: initiator reported error (24 - iSCSI login failed due to authorization failure)
+iscsiadm: Could not log into all portals
+```
+
+To make it work, we need to change the initiator name
+
+```
+[root@kvm1 ~]# cat /etc/iscsi/initiatorname.iscsi
+InitiatorName=iqn.1988-12.com.oracle:c484a390a0e2
+
+[root@kvm1 ~]# echo "InitiatorName=iqn.2025-12.local.client:node01" > /etc/iscsi/initiatorname.iscsi
+
+[root@kvm1 ~]# systemctl restart iscsid 
+
+[root@kvm1 ~]# iscsiadm -m node -T iqn.2025-12.local.server:sdb -p 10.1.32.197 --login
+Logging in to [iface: default, target: iqn.2025-12.local.server:sdb, portal: 10.1.32.197,3260]
+Login to [iface: default, target: iqn.2025-12.local.server:sdb, portal: 10.1.32.197,3260] successful.
+
+[root@kvm1 ~]# fdisk -l /dev/sdb
+Disk /dev/sdb: 100 GiB, 107374182400 bytes, 209715200 sectors
+Disk model: sdb             
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 4194304 bytes
+Disklabel type: dos
+Disk identifier: 0x25f630ff
 ```
 
 ### Identify Connected Targets
