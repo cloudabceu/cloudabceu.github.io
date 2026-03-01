@@ -34,6 +34,8 @@ The patch in this post is designed around this goal:
 - Activate VM LVs exclusively on the host currently using them.
 - Leave VM migration coordination to an external control plane.
 
+See also: [Rebuilding libvirt on Ubuntu 24.04 with CLVM + sanlock patch]({% post_url 2026-03-01-rebuild-libvirt-for-ubuntu-24.04 %}) — a companion post with Debian/Ubuntu packaging notes and a similar CLVM/sanlock patch.
+
 ## Prerequisites and repository setup
 
 ```bash
