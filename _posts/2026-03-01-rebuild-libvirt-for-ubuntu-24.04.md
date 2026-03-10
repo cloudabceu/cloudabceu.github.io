@@ -2,7 +2,7 @@
 layout: post
 title: Rebuilding libvirt on Ubuntu 24.04 with CLVM + sanlock patch
 toc: true
-categories: [Linux, Libvirt]
+categories: [Libvirt, CLVM]
 ---
 
 This post documents how to fetch, patch and rebuild `libvirt` (libvirt 10.0.0) on Ubuntu 24.04. The instructions show how to obtain the original source (Launchpad / Ubuntu archives), install build dependencies, apply local patches, and produce installable .deb packages.

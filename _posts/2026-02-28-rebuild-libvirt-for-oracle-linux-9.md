@@ -2,7 +2,7 @@
 layout: post
 title: Rebuilding libvirt on Oracle Linux 9 with CLVM + sanlock patch
 toc: true
-categories: [Linux, Libvirt]
+categories: [Libvirt, CLVM]
 ---
 
 In this guide, I walk through rebuilding `libvirt-daemon-driver-storage-logical` on Oracle Linux 9 and applying a custom CLVM + sanlock patch.
