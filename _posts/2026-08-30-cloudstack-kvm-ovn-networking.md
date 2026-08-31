@@ -37,10 +37,13 @@ ovn-sbctl set-connection ptcp:6642:10.0.0.10
 
 ## Step B/C - KVM host setup (every compute node)
 
-```bash
-apt install ovn-host openvswitch-switch libvirt-daemon-system
+Pin the chassis `system-id` to the hostname *before* `openvswitch-switch` is installed or started - `openvswitch-switch`'s own startup script runs `ovs-ctl start --system-id=random` on every (re)start (systemd start, host reboot, ...), and that call is not idempotent against a live `ovs-vsctl set ... external_ids:system-id` change: it always re-derives `system-id` from `/etc/openvswitch/system-id.conf`, generating and persisting a random UUID there the first time the file is missing. Once that file holds a random UUID, it holds it forever - a later `ovs-vsctl set` only touches the running `external_ids:system-id`, and the next restart or reboot puts the random UUID straight back. Write the hostname into the file first, so OVS never gets a chance to invent one:
 
-ovs-vsctl set open_vswitch . external_ids:system-id=$(hostname)
+```bash
+echo "$(hostname)" > /etc/openvswitch/system-id.conf
+chmod 0644 /etc/openvswitch/system-id.conf
+
+apt install ovn-host openvswitch-switch libvirt-daemon-system
 
 ovs-vsctl set open_vswitch . \
   external_ids:ovn-remote="tcp:10.0.0.10:6642"
