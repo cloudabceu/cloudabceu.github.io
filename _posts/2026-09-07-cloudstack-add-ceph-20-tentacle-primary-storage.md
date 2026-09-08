@@ -5,7 +5,7 @@ toc: true
 categories: [CloudStack, KVM, Ceph]
 ---
 
-Ceph 20 ("Tentacle") is the newest Ceph major release, and if you try to add it as RBD primary storage to a CloudStack KVM cluster today, you will very likely hit two separate failures before you get a working pool - neither of which is a CloudStack bug. This post walks through both, and how to get a Tentacle cluster working as CloudStack primary storage today, without downgrading Ceph.
+Ceph 20 ("Tentacle") is the newest Ceph major release, and if you try to add it as RBD primary storage to a CloudStack KVM cluster today, you will very likely hit three separate failures before you get a working setup - none of which is a CloudStack bug. This post walks through all three, and how to get a Tentacle cluster working as CloudStack primary storage today, without downgrading Ceph.
 
 This is a follow-up to [Ceph - Deploy Ceph 20 (tentacle) with cephadm-ansible]({{ site.baseurl }}{% post_url 2026-09-06-Ceph-Deploy-Tentacle-By-Cephadm-Ansible %}) - if you don't have a Tentacle cluster yet, start there.
 
@@ -38,7 +38,15 @@ or, after fixing the first problem, this one instead:
 ERROR [kvm.storage.LibvirtStorageAdaptor] Failed to create RBD storage pool: org.libvirt.LibvirtException: internal error: failed to set RADOS option: auth_supported
 ```
 
-Both are environment/library issues below CloudStack, not something fixed by CloudStack config. Here's what's going on and how to fix each one.
+And once the pool is up and you actually deploy a VM on it, a third one:
+
+```
+kernel: qemu-kvm[102008]: segfault at 0 ip 0000000000000000 sp 00007ffc94819798 error 14 in qemu-kvm[...] likely on CPU 2 (core 0, socket 4)
+```
+
+with the CloudStack management server reporting `Unable to orchestrate the start of VM instance ...` and no other detail.
+
+All three are environment/library issues below CloudStack, not something fixed by CloudStack config. Here's what's going on and how to fix each one.
 
 ## Problem 1: the KVM host's Ceph client is too old for Tentacle
 
@@ -89,7 +97,7 @@ There's also an [apache/cloudstack#13991](https://github.com/apache/cloudstack/p
 
 ### Workaround: an `LD_PRELOAD` shim for `libvirtd`
 
-Until libvirt#918 lands and gets packaged, the option I'd reach for on the hypervisors themselves is a tiny `LD_PRELOAD` shim that intercepts the one deprecated `rados_conf_set()` call libvirt makes and rewrites it to `auth_client_required` (the same replacement suggested in libvirt#918). It's scoped to the `libvirtd` service only via a systemd drop-in, so nothing else on the host is affected.
+Until libvirt#918 lands and gets packaged, the option I'd reach for on the hypervisors themselves is a tiny `LD_PRELOAD` shim that intercepts the one deprecated `rados_conf_set()` call libvirt makes and rewrites it to `auth_client_required` (the same replacement suggested in libvirt#918). It's scoped to the `libvirtd` service via a systemd drop-in - but read Problem 3 below before you install this as-is, because a plain `Environment=` drop-in leaks the preload into every QEMU process libvirtd spawns too, and that will crash your VMs.
 
 `rados_auth_shim.c`:
 
@@ -134,7 +142,7 @@ systemctl daemon-reload
 systemctl restart libvirtd
 ```
 
-The `Environment=` line only applies to the `libvirtd` unit because of the drop-in, not system-wide - it won't affect `qemu`/other processes on the host. You can confirm it's active by watching the journal while a pool is (re)created:
+The `Environment=` line only applies to the `libvirtd` unit because of the drop-in - but `Environment=` is inherited by everything `libvirtd` forks, and `libvirtd` forks a `qemu-kvm` process for every VM it starts. That's Problem 3, next. You can confirm the shim itself is active by watching the journal while a pool is (re)created:
 
 ```bash
 journalctl -u libvirtd -f
@@ -155,11 +163,51 @@ Allocation:     0.00 B
 Available:      299.91 GiB
 ```
 
-...and CloudStack's own "Add primary storage" retries the same pool creation successfully once the fixes are applied on all KVM hosts.
+...and CloudStack's own "Add primary storage" retries the same pool creation successfully once the fixes are applied on all KVM hosts. But try to actually deploy a VM onto it and every one will fail - which is Problem 3.
+
+## Problem 3: the shim crashes every QEMU process it leaks into
+
+The pool exists, `virsh pool-info` is happy, and CloudStack's `qemu-img` calls into it work fine (that's the separate, CloudStack-side fix in [apache/cloudstack#13991](https://github.com/apache/cloudstack/pull/13991) - see the caveat below on why you still need that PR even with this fix in place). But deploying any VM on the pool fails, and the KVM agent log shows the domain never actually starts:
+
+```
+ERROR [cloud.agent.Agent] internal error: process exited while connecting to monitor
+```
+
+with a matching kernel log line:
+
+```
+kernel: qemu-kvm[102008]: segfault at 0 ip 0000000000000000 sp 00007ffc94819798 error 14 in qemu-kvm[...]
+```
+
+This reproduces with a bare `virsh create` on any domain with an RBD disk, no CloudStack involved, and it reproduces identically no matter which `librados`/`librbd` version is installed (16.2.4, 18.2.8, 20.2.4 - tried all three). The variable that actually matters is whether `LD_PRELOAD=/usr/local/lib/rados_auth_shim.so` is set in the process's environment: unset it and the exact same QEMU command line either runs cleanly or fails gracefully; leave it set and QEMU segfaults every time. The shim itself - or more precisely, a QEMU process loading it via preload rather than libvirtd calling into it directly - is the actual crash.
+
+The systemd drop-in from Problem 2 sets `LD_PRELOAD` as `Environment=` on the whole `libvirtd.service`, and systemd's `Environment=` is inherited by every child process the unit's main process forks - including the `qemu-kvm` binary libvirtd execs for each VM. libvirtd's own in-process RBD storage-pool code (Problem 2's fix target) genuinely needs the shim, since that call happens inside `libvirtd` itself with no exec involved. The spawned VMs don't need it and must not get it.
+
+### Fix: strip `LD_PRELOAD` before QEMU execs, not before libvirtd starts
+
+Rather than trying to scope `Environment=` more tightly (systemd has no per-child-process override for this), wrap the `qemu-kvm` binary itself so it drops `LD_PRELOAD` before running the real emulator. `libvirtd`'s own process environment - and so its own librados calls - is untouched; only the exec'd child loses the preload.
+
+```bash
+mv /usr/libexec/qemu-kvm /usr/libexec/qemu-kvm.real
+cat > /usr/libexec/qemu-kvm <<'EOF'
+#!/bin/bash
+# Strip LD_PRELOAD (rados_auth_shim.so, needed only by libvirtd itself for
+# RBD storage-pool management) before exec-ing the real qemu-kvm binary --
+# the shim crashes QEMU when it inherits it as a spawned child process.
+unset LD_PRELOAD
+exec /usr/libexec/qemu-kvm.real "$@"
+EOF
+chmod 755 /usr/libexec/qemu-kvm
+chown --reference=/usr/libexec/qemu-kvm.real /usr/libexec/qemu-kvm
+
+systemctl restart libvirtd
+```
+
+Verify with the same bare `virsh create` reproduction from above - a domain with a cephx-authenticated RBD `<disk>` should now start and stay running. With all three fixes in place, actual VM deploys onto the Tentacle-backed pool work end-to-end.
 
 ## Adding the storage in CloudStack
 
-Once both host-side fixes are applied, adding the pool is completely ordinary - no CloudStack-side workaround needed:
+Once all three host-side fixes are applied, adding the pool is completely ordinary - no CloudStack-side workaround needed:
 
 ```bash
 cmk create storagepool \
@@ -176,9 +224,10 @@ or via the UI: **Infrastructure > Primary Storage > Add Primary Storage**, proto
 
 ## Caveats
 
-- The `LD_PRELOAD` shim is a stopgap, not a real fix. It should come out once libvirt actually ships a fix for [#918](https://gitlab.com/libvirt/libvirt/-/work_items/918) and your distro packages it: `rm /etc/systemd/system/libvirtd.service.d/rados-auth-shim.conf /usr/local/lib/rados_auth_shim.so && systemctl daemon-reload && systemctl restart libvirtd`.
-- Both fixes (client library upgrade + shim) need to be applied on **every** KVM host in the cluster, not just one.
-- If you rebuild/reimage a KVM host later, remember to reapply both - they aren't part of the standard CloudStack KVM agent install.
+- **Apply [apache/cloudstack#13991](https://github.com/apache/cloudstack/pull/13991) too - the QEMU wrapper doesn't replace it.** `qemu-img` is a separate binary (`/usr/bin/qemu-img`, from the `qemu-img` package) invoked directly by the CloudStack KVM agent, not spawned by `libvirtd`. It never had the shim's `LD_PRELOAD` applied to it in the first place (that env var only ever lived on `libvirtd.service`), so stripping it from the `qemu-kvm` wrapper changes nothing for `qemu-img`. Without #13991, `qemu-img convert` against the pool still fails with the raw, unpatched `invalid conf option auth_supported` - template seeding and volume/snapshot copies never get to try the shim at all.
+- The `LD_PRELOAD` shim (and the QEMU wrapper needed to contain it) is a stopgap, not a real fix. Both should come out once libvirt actually ships a fix for [#918](https://gitlab.com/libvirt/libvirt/-/work_items/918) and your distro packages it: `rm /etc/systemd/system/libvirtd.service.d/rados-auth-shim.conf /usr/local/lib/rados_auth_shim.so && systemctl daemon-reload && mv /usr/libexec/qemu-kvm.real /usr/libexec/qemu-kvm && systemctl restart libvirtd`.
+- All three fixes (client library upgrade, shim, QEMU wrapper) need to be applied on **every** KVM host in the cluster, not just one.
+- If you rebuild/reimage a KVM host later, remember to reapply all three - none of them are part of the standard CloudStack KVM agent install.
 - If you don't specifically need Ceph 20 for testing, pinning to Squid (19.2.x) or Reef (18.2.x) avoids all of this entirely - both are well-supported today and don't have the `auth_supported` problem.
 
 ## References
